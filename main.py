@@ -13,10 +13,10 @@ import time
 
 # Inputs
 source = 'src.mp4'
-renderHeight = '60'
-outputHeight = '1080'
-fontName = 'Courier.ttf'    # Must be .ttf
-charSet = '  .:/?$&###'
+renderHeight = '60'         # Determines rendering resolution, in characters.
+outputHeight = '1080'       # Determines the output resolution, in pixels. Aspect ratio copies src.
+fontName = 'MonospaceTypewriter.ttf'    # Must be .ttf or .otf
+charSet = ' .-^:~/*+=?%##&$$@@@@@@@@@@@@'
 outPath = 'out.mkv'         # Should be .mkv
 compression = True
 cleanup = True

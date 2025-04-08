@@ -6,7 +6,9 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 
 import javax.imageio.ImageIO;
 
@@ -64,7 +66,7 @@ public class VideoFilter {
     	// First generates a charSet without offset to calculate the "dead-space" on the left and top
     	for(int i = 0; i < chars.length(); i++) {
     		g.setColor(new Color(255, 255, 255));
-    		g.drawString(Character.toString(chars.charAt(i)), 0, fontH);
+    		g.drawString(chars.substring(i, i+1), 0, fontH);
     		
     		final byte[] pixels = ((DataBufferByte) character.getRaster().getDataBuffer()).getData();
 
@@ -93,15 +95,36 @@ public class VideoFilter {
     	};
     	
     	// Then generates a charSet with offset
+		String[] charData = new String[chars.length()+1];
+		charData[0] = "Char,Brightness";
     	for(int i = 0; i < chars.length(); i++) {
+			String c = chars.substring(i, i+1);
     		g.setColor(new Color(255, 255, 255));
-    		g.drawString(Character.toString(chars.charAt(i)), -minLeftBuffer, fontH - minUpBuffer);
+    		g.drawString(c, -minLeftBuffer, fontH - minUpBuffer);
     		charSet[i] = ImgToMat(character);
+
+			byte[] p = ((DataBufferByte) character.getRaster().getDataBuffer()).getData();
+			float bright = 0;
+			for (byte b:p) {
+				bright -= b;
+			}
+			if(c.equals(",")) c = "\",\""; 
+			charData[i+1] = String.format("%s,%f", c, bright / p.length);
+
     		g.setColor(new Color(0, 0, 0));
     		g.fillRect(0, 0, fontW, fontH);
     	};
     	g.dispose();
     	character.flush();
+
+		// Creates debug file to optimize char set for fonts
+		try (PrintWriter writer = new PrintWriter("chars.csv")) {
+			for(String s: charData) writer.println(s);
+		} catch (FileNotFoundException error) {
+			// Write to System.err instead of System.out
+			System.err.println("File cannot be written to");
+			System.exit(0);
+		}
         
     	Mat frame = new Mat();
     	Mat scaledMat = new Mat(renderH, renderW, CvType.CV_8UC3);
@@ -112,6 +135,8 @@ public class VideoFilter {
 
         final VideoWriter writer = new VideoWriter(args[5], VideoWriter.fourcc('m', 'p', '4', 'v'), FPS, new Size(outW, outH));
         final Scalar brightnessScale = new Scalar((chars.length() - 1) / 256.0);
+		final float fontHf = (float)outH / (float)renderH;
+		final float fontWf = (float)outW / (float)renderW;
         while(cap.read(frame)){
         	// Scales frame size
             Imgproc.resize(frame, scaledMat, scaledMat.size(), 0, 0, Imgproc.INTER_NEAREST);
@@ -125,14 +150,15 @@ public class VideoFilter {
             // Prints characters to new frames
             final byte[] matrix = new byte[renderW*renderH];
         	indexMat.get(0, 0, matrix);
-        	for(int x = 0; x < renderW; x++) {
-        		for(int y = 0; y < renderH; y++) {
-                    int index = y*renderW + x;
+			int index = 0;
+			for(float y = 0; y < outH - fontH; y += fontHf) {
+        		for(float x = 0; x < outW - fontW; x += fontWf) {
         			if(matrixMem[index] != matrix[index]) {
-        				int dstX = x * outW / renderW;
-            			int dstY = y * outH / renderH;
-        				charSet[matrix[index]].copyTo(frameOut.rowRange(dstY, dstY+fontH).colRange(dstX, dstX+fontW));
+        				int dstX = (int)x;
+						int dstY = (int)y;
+        				charSet[matrix[index]].copyTo(frameOut.submat(dstY, dstY+fontH, dstX, dstX+fontW));
         			};
+					index++;
         		};
         	};
 
